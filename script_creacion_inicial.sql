@@ -1,6 +1,7 @@
 USE GD1C2025
 
 -- Decision de disenio: NO TENDRAN IDENTITY Sucursal, Sillon_Codigo ni Sillon_Modelo (pq van dando saltos)
+-- Decision de disenio: Los totales de compra, pedido y sucursal deben si o si cargarse manualmente. Esto es porque en la tabla maestra hay campos mal calculados los cuales se deben respetar (y una compra se crea antes que sus detalles)
 
 -- Materiales
 CREATE TABLE DATA_DEALERS.Material(
@@ -100,12 +101,12 @@ CREATE TABLE DATA_DEALERS.Cliente(
 -- Pedidos
 
 CREATE TABLE DATA_DEALERS.Pedido(
-    Pedido_Numero DECIMAL(18,0) PRIMARY KEY IDENTITY(56771553, 1),
+    Pedido_Numero DECIMAL(18,0) PRIMARY KEY IDENTITY(56360503, 1),
     Pedido_Sucursal BIGINT NOT NULL REFERENCES DATA_DEALERS.Sucursal,
     Pedido_Cliente BIGINT NOT NULL REFERENCES DATA_DEALERS.Cliente,
     Pedido_Estado NVARCHAR(255) NOT NULL CHECK (Pedido_Estado IN ('ENTREGADO', 'CANCELADO', 'PENDIENTE')),
     Pedido_Fecha DATETIME2(6) DEFAULT SYSDATETIME(), -- Decision de Diseño
-    Pedido_Total DECIMAL(18,2) NOT NULL -- Trigger
+    Pedido_Total DECIMAL(18,2) NOT NULL
 )
 
 CREATE TABLE DATA_DEALERS.Pedido_Cancelacion(
@@ -120,18 +121,18 @@ CREATE TABLE DATA_DEALERS.Detalle_Pedido(
     Detalle_Sillon BIGINT REFERENCES DATA_DEALERS.Sillon NOT NULL,
     Detalle_Pedido_Precio DECIMAL(18,2) NOT NULL CHECK (Detalle_Pedido_Precio > 0),
     Detalle_Pedido_Cantidad BIGINT NOT NULL CHECK (Detalle_Pedido_Cantidad > 0),
-    Detalle_Pedido_Subtotal AS (Detalle_Pedido_Precio * Detalle_Pedido_Cantidad) PERSISTED,
+    Detalle_Pedido_Subtotal DECIMAL(18,2),
     PRIMARY KEY (Detalle_Pedido_Numero, Pedido_Numero)
 )
 
 -- Facturas
 
 CREATE TABLE DATA_DEALERS.Factura(
-    Factura_Numero BIGINT PRIMARY KEY IDENTITY(78694631, 1),
+    Factura_Numero BIGINT PRIMARY KEY IDENTITY(46118858, 1),
     Factura_Sucursal BIGINT REFERENCES DATA_DEALERS.Sucursal NOT NULL,
     Factura_Cliente BIGINT REFERENCES DATA_DEALERS.Cliente NOT NULL,
     Factura_Fecha DATETIME2(6) DEFAULT SYSDATETIME(), -- Decision de Diseño
-    Factura_Total DECIMAL(38,2) NOT NULL -- Trigger
+    Factura_Total DECIMAL(38,2) NOT NULL
 )
 
 CREATE TABLE DATA_DEALERS.Detalle_Factura(
@@ -140,17 +141,17 @@ CREATE TABLE DATA_DEALERS.Detalle_Factura(
     Pedido_Numero DECIMAL(18, 0) NOT NULL,
     Detalle_Factura_Precio DECIMAL(18,2) NOT NULL CHECK (Detalle_Factura_Precio > 0),
     Detalle_Factura_Cantidad DECIMAL(18, 0) NOT NULL CHECK (Detalle_Factura_Cantidad > 0),
-    Detalle_Factura_Subtotal AS (Detalle_Factura_Precio * Detalle_Factura_Cantidad) PERSISTED,
+    Detalle_Factura_Subtotal DECIMAL(18, 2),
     PRIMARY KEY (Detalle_Factura_Numero, Factura_Numero),
     FOREIGN KEY (Detalle_Factura_Numero, Pedido_Numero) REFERENCES DATA_DEALERS.Detalle_Pedido
 )
 
 CREATE TABLE DATA_DEALERS.Envio(
-    Envio_Numero DECIMAL(18,0) PRIMARY KEY IDENTITY(45613002,1),
+    Envio_Numero DECIMAL(18,0) PRIMARY KEY IDENTITY(90664928,1),
     Envio_Factura BIGINT REFERENCES DATA_DEALERS.Factura NOT NULL,
     Envio_ImporteTraslado DECIMAL(18,2) NOT NULL CHECK (Envio_ImporteTraslado > 0),
     Envio_ImporteSubida DECIMAL(18,2) DEFAULT 0  CHECK (Envio_ImporteSubida > 0), -- Decision de diseño el default 0
-    Envio_Total AS (Envio_ImporteTraslado + Envio_ImporteSubida) PERSISTED, -- CHECK o ALIAS o TRIGGER: CONSULTAR
+    Envio_Total DECIMAL(18, 2), -- CHECK o ALIAS o TRIGGER: CONSULTAR
     Envio_Fecha_Programada DATETIME2(0) NOT NULL,
     Envio_Fecha_Entrega DATETIME2(0) -- Decision de diseño
 )
@@ -165,11 +166,11 @@ CREATE TABLE DATA_DEALERS.Proveedor(
 )
 
 CREATE TABLE DATA_DEALERS.Compra( -- Consulta (asi como esta, podes crear compra sin detalles, igual que pedido, y analogo a silones sin material_por_sillon)
-    Compra_Numero DECIMAL(18, 0) PRIMARY KEY IDENTITY(81264239, 1), 
+    Compra_Numero DECIMAL(18, 0) PRIMARY KEY IDENTITY(12242153, 1), 
     Compra_Proveedor NVARCHAR(255) REFERENCES DATA_DEALERS.Proveedor NOT NULL,
     Compra_Sucursal BIGINT REFERENCES DATA_DEALERS.Sucursal NOT NULL,
     Compra_Fecha DATETIME2(6) DEFAULT SYSDATETIME(), -- Decision de Diseño
-    Compra_Total DECIMAL(18, 2) NOT NULL -- Trigger
+    Compra_Total DECIMAL(18, 2) NOT NULL
 )
 
 CREATE TABLE DATA_DEALERS.Detalle_Compra(
@@ -178,72 +179,68 @@ CREATE TABLE DATA_DEALERS.Detalle_Compra(
     Detalle_Compra_Material BIGINT REFERENCES DATA_DEALERS.Material NOT NULL,
     Detalle_Compra_Precio DECIMAL(18,2) NOT NULL CHECK (Detalle_Compra_Precio > 0),
     Detalle_Compra_Cantidad DECIMAL(18, 0) NOT NULL CHECK (Detalle_Compra_Cantidad > 0),
-    Detalle_Compra_Subtotal AS (Detalle_Compra_Precio * Detalle_Compra_Cantidad) PERSISTED,
+    Detalle_Compra_Subtotal DECIMAL(18, 2),
     PRIMARY KEY (Detalle_Compra_Codigo, Compra_Numero)
 )
 GO
 
 -- Triggers
-
-CREATE TRIGGER Actualizar_Compra_Total
+CREATE TRIGGER Calcular_Compra_Subtotal -- Si no se especifico un subtotal, se calcula
 ON DATA_DEALERS.Detalle_Compra
-AFTER INSERT, UPDATE, DELETE
+AFTER INSERT
 AS
 BEGIN
-    UPDATE C
-    SET Compra_Total = (
-        SELECT SUM(Detalle_Compra_Subtotal)
-        FROM DATA_DEALERS.Detalle_Compra DC
-        WHERE DC.Compra_Numero = C.Compra_Numero
-    )
-    FROM DATA_DEALERS.Compra C
-    WHERE C.Compra_Numero IN (
-        SELECT DISTINCT Compra_Numero FROM inserted
-        UNION
-        SELECT DISTINCT Compra_Numero FROM deleted
-    )
-END 
+    UPDATE dc
+    SET Detalle_Compra_Subtotal = i.Detalle_Compra_Precio * i.Detalle_Compra_Cantidad
+    FROM DATA_DEALERS.Detalle_Compra dc
+    JOIN inserted i
+        ON dc.Detalle_Compra_Codigo = i.Detalle_Compra_Codigo
+        AND dc.Compra_Numero = i.Compra_Numero
+    WHERE i.Detalle_Compra_Subtotal IS NULL
+END
 GO
 
-CREATE TRIGGER Actualizar_Pedido_Total
+CREATE TRIGGER Calcular_Pedido_Subtotal -- Si no se especifico un subtotal, se calcula
 ON DATA_DEALERS.Detalle_Pedido
-AFTER INSERT, UPDATE, DELETE
+AFTER INSERT
 AS
 BEGIN
-    UPDATE P
-    SET Pedido_Total = (
-        SELECT SUM(Detalle_Pedido_Subtotal)
-        FROM DATA_DEALERS.Detalle_Pedido DP
-        WHERE DP.Pedido_Numero = P.Pedido_Numero
-    )
-    FROM DATA_DEALERS.Pedido P
-    WHERE P.Pedido_Numero IN (
-        SELECT DISTINCT Pedido_Numero FROM inserted
-        UNION
-        SELECT DISTINCT Pedido_Numero FROM deleted
-    )
-END 
+    UPDATE dp
+    SET Detalle_Pedido_Subtotal = i.Detalle_Pedido_Precio * i.Detalle_Pedido_Cantidad
+    FROM DATA_DEALERS.Detalle_Pedido dp
+    JOIN inserted i
+        ON dp.Detalle_Pedido_Numero = i.Detalle_Pedido_Numero
+        AND dp.Pedido_Numero = i.Pedido_Numero
+    WHERE i.Detalle_Pedido_Subtotal IS NULL
+END
 GO
 
-CREATE TRIGGER Actualizar_Factura_Total
+CREATE TRIGGER Calcular_Factura_Subtotal -- Si no se especifico un subtotal, se calcula
 ON DATA_DEALERS.Detalle_Factura
-AFTER INSERT, UPDATE, DELETE
+AFTER INSERT
 AS
 BEGIN
-    UPDATE F
-    SET Factura_Total = (
-        SELECT SUM(Detalle_Factura_Subtotal) + ISNULL(E.Envio_Total, 0)
-        FROM DATA_DEALERS.Detalle_Factura DF
-            LEFT JOIN Envio E ON (E.Envio_Factura = F.Factura_Numero)
-        WHERE DF.Factura_Numero = F.Factura_Numero
-    )
-    FROM DATA_DEALERS.Factura F
-    WHERE F.Factura_Numero IN (
-        SELECT DISTINCT Factura_Numero FROM inserted
-        UNION
-        SELECT DISTINCT Factura_Numero FROM deleted
-    )
-END 
+    UPDATE df
+    SET Detalle_Factura_Subtotal = i.Detalle_Factura_Precio * i.Detalle_Factura_Cantidad
+    FROM DATA_DEALERS.Detalle_Factura df
+    JOIN inserted i
+        ON df.Detalle_Factura_Numero = i.Detalle_Factura_Numero
+        AND df.Factura_Numero = i.Factura_Numero
+    WHERE i.Detalle_Factura_Subtotal IS NULL
+END
+GO
+
+CREATE TRIGGER Calcular_Envio_Total -- Si no se especifico un total, se calcula
+ON DATA_DEALERS.Envio
+AFTER INSERT
+AS
+BEGIN
+    UPDATE e
+    SET Envio_Total = i.Envio_ImporteTraslado + i.Envio_ImporteSubida
+    FROM DATA_DEALERS.Envio e
+        JOIN inserted i ON e.Envio_Numero = i.Envio_Numero
+    WHERE i.Envio_Total IS NULL
+END
 GO
 
 CREATE TRIGGER Verificar_Material_Por_Sillon -- Decision de disenio los materiales se ponen los 3 a la vez
@@ -493,21 +490,6 @@ END
 GO
 
 -- Cliente
-/*CREATE PROCEDURE DATA_DEALERS.migrate_cliente
-AS
-BEGIN
-    INSERT INTO DATA_DEALERS.Cliente (Cliente_Direccion, Cliente_Dni, Cliente_Nombre, Cliente_Apellido, Cliente_FechaNacimiento, Cliente_mail, Cliente_telefono)
-    SELECT DISTINCT 
-        Cliente_Direccion, 
-        Cliente_Dni, 
-        Cliente_Nombre, 
-        Cliente_Apellido, 
-        Cliente_FechaNacimiento, 
-        Cliente_mail, 
-        Cliente_telefono
-    FROM gd_esquema.Maestra
-END
-GO*/
 
 CREATE PROCEDURE DATA_DEALERS.migrate_cliente
 AS
@@ -522,23 +504,38 @@ BEGIN
         m.Cliente_mail, 
         m.Cliente_telefono
     FROM gd_esquema.Maestra m
-        JOIN DATA_DEALERS.Direccion d ON m.Cliente_Direccion = d.Direccion_Codigo
-    --NOT NULL?
+        JOIN DATA_DEALERS.Provincia p ON m.Cliente_Provincia = p.Provincia_Nombre
+        JOIN DATA_DEALERS.Localidad l ON m.Cliente_Localidad = l.Localidad_Nombre AND p.Provincia_Codigo = l.Provincia_Codigo 
+        JOIN DATA_DEALERS.Direccion d ON m.Cliente_Direccion = d.Direccion_Nombre AND l.Localidad_Codigo = d.Localidad_Codigo
+    WHERE m.Cliente_Dni IS NOT NULL
 END
 GO
 
 -- Pedidos
-/*CREATE PROCEDURE DATA_DEALERS.migrate_pedido
+
+CREATE PROCEDURE DATA_DEALERS.migrate_pedido
 AS
 BEGIN
     INSERT INTO DATA_DEALERS.Pedido (Pedido_Sucursal, Pedido_Cliente, Pedido_Estado, Pedido_Fecha, Pedido_Total)
-    SELECT DISTINCT 
-        Pedido_Sucursal, 
-        Pedido_Cliente, 
-        Pedido_Estado, 
-        Pedido_Fecha, 
-        Pedido_Total
-    FROM gd_esquema.Maestra
+    SELECT  
+        m.Sucursal_NroSucursal, 
+        c.Cliente_Id, 
+        m.Pedido_Estado, 
+        m.Pedido_Fecha, 
+        m.Pedido_Total
+    FROM gd_esquema.Maestra m
+        JOIN DATA_DEALERS.Cliente c ON m.Cliente_Dni = c.Cliente_Dni
+        AND m.Cliente_Nombre = c.Cliente_Nombre
+        AND m.Cliente_Apellido = c.Cliente_Apellido
+    WHERE m.Pedido_Numero IS NOT NULL
+    GROUP BY -- Decision disenio: Usamos GROUP BY para poder ordenar por un campo que no este presente en el select (en 4 lados)
+        m.Pedido_Numero,
+        m.Sucursal_NroSucursal, 
+        c.Cliente_Id, 
+        m.Pedido_Estado, 
+        m.Pedido_Fecha, 
+        m.Pedido_Total
+    ORDER BY m.Pedido_Numero
 END 
 GO
 
@@ -551,79 +548,55 @@ BEGIN
         Pedido_Cancelacion_Fecha, 
         Pedido_Cancelacion_Motivo
     FROM gd_esquema.Maestra
+    WHERE Pedido_Cancelacion_Fecha IS NOT NULL
 END 
 GO
 
 CREATE PROCEDURE DATA_DEALERS.migrate_detalle_pedido
 AS
 BEGIN
+
     INSERT INTO DATA_DEALERS.Detalle_Pedido (Detalle_Pedido_Numero, Pedido_Numero, Detalle_Sillon, Detalle_Pedido_Precio, Detalle_Pedido_Cantidad)
     SELECT DISTINCT 
-        Detalle_Pedido_Numero, 
-        Pedido_Numero, 
-        Detalle_Sillon, 
-        Detalle_Pedido_Precio, 
-        Detalle_Pedido_Cantidad
-    FROM gd_esquema.Maestra
-END 
-GO*/
-
-CREATE PROCEDURE DATA_DEALERS.migrate_pedido
-AS
-BEGIN
-    INSERT INTO DATA_DEALERS.Pedido (Pedido_Sucursal, Pedido_Cliente, Pedido_Estado, Pedido_Fecha, Pedido_Total)
-    SELECT DISTINCT 
-        s.Sucursal_NroSucursal, 
-        c.Cliente_Id, 
-        m.Pedido_Estado, 
-        m.Pedido_Fecha, 
-        m.Pedido_Total
+        /*(   SELECT COUNT(*) 
+            FROM DATA_DEALERS.Detalle_Pedido dp
+            WHERE dp.Pedido_Numero = m.Pedido_Numero
+        ),*/
+        ROW_NUMBER() OVER (PARTITION BY m.Pedido_Numero ORDER BY m.Pedido_Numero, m.Sillon_Codigo) - 1 AS Detalle_Pedido_Numero,
+        m.Pedido_Numero, 
+        m.Sillon_Codigo, 
+        m.Detalle_Pedido_Precio, 
+        m.Detalle_Pedido_Cantidad
     FROM gd_esquema.Maestra m
-        JOIN DATA_DEALERS.Sucursal s ON m.Pedido_Sucursal = s.Sucursal_NroSucursal
-        JOIN DATA_DEALERS.Cliente c ON m.Pedido_Cliente = c.Cliente_Id
-    --NOT NULL?
-END 
-GO
-
-CREATE PROCEDURE DATA_DEALERS.migrate_pedido_cancelacion
-AS
-BEGIN
-    INSERT INTO DATA_DEALERS.Pedido_Cancelacion (Pedido_Numero, Pedido_Cancelacion_Fecha, Pedido_Cancelacion_Motivo)
-    SELECT DISTINCT 
-        p.Pedido_Numero, 
-        m.Pedido_Cancelacion_Fecha, 
-        m.Pedido_Cancelacion_Motivo
-    FROM gd_esquema.Maestra
-        JOIN DATA_DEALERS.Pedido p ON m.Pedido_Numero = p.Pedido_Numero
-    --NOT NULL?
-END 
-GO
-
-CREATE PROCEDURE DATA_DEALERS.migrate_detalle_pedido
-AS
-BEGIN
-    INSERT INTO DATA_DEALERS.Detalle_Pedido (Detalle_Pedido_Numero, Pedido_Numero, Detalle_Sillon, Detalle_Pedido_Precio, Detalle_Pedido_Cantidad)
-    SELECT DISTINCT 
-        Detalle_Pedido_Numero, 
-        Pedido_Numero, 
-        Detalle_Sillon, 
-        Detalle_Pedido_Precio, 
-        Detalle_Pedido_Cantidad
-    FROM gd_esquema.Maestra
+    WHERE m.Pedido_Numero IS NOT NULL
+    AND m.Sillon_Codigo IS NOT NULL
+    AND m.Detalle_Pedido_Precio IS NOT NULL
+    AND m.Detalle_Pedido_Cantidad IS NOT NULL
 END 
 GO
 
 -- Facturas
-/*CREATE PROCEDURE DATA_DEALERS.migrate_factura
+CREATE PROCEDURE DATA_DEALERS.migrate_factura
 AS
 BEGIN
     INSERT INTO DATA_DEALERS.Factura (Factura_Sucursal, Factura_Cliente, Factura_Fecha, Factura_Total)
-    SELECT DISTINCT 
-        Factura_Sucursal, 
-        Factura_Cliente, 
-        Factura_Fecha, 
-        Factura_Total
-    FROM gd_esquema.Maestra
+    SELECT 
+        m.Sucursal_NroSucursal,
+        c.Cliente_Id,
+        m.Factura_Fecha, 
+        m.Factura_Total
+    FROM gd_esquema.Maestra m
+        JOIN DATA_DEALERS.Cliente c ON m.Cliente_Dni = c.Cliente_Dni
+        AND m.Cliente_Nombre = c.Cliente_Nombre
+        AND m.Cliente_Apellido = c.Cliente_Apellido
+    WHERE m.Factura_Numero IS NOT NULL
+    GROUP BY
+        m.Factura_Numero,
+        m.Sucursal_NroSucursal, 
+        c.Cliente_Id, 
+        m.Factura_Fecha, 
+        m.Factura_Total
+    ORDER BY m.Factura_Numero
 END 
 GO
 
@@ -632,46 +605,42 @@ AS
 BEGIN
     INSERT INTO DATA_DEALERS.Detalle_Factura (Factura_Numero, Detalle_Factura_Numero, Pedido_Numero, Detalle_Factura_Precio, Detalle_Factura_Cantidad)
     SELECT DISTINCT 
-        Factura_Numero, 
-        Detalle_Factura_Numero, 
-        Pedido_Numero, 
-        Detalle_Factura_Precio, 
-        Detalle_Factura_Cantidad
-    FROM gd_esquema.Maestra
+        --f.Factura_Numero, 
+        m.Factura_Numero,
+        m.Detalle_Factura_Numero, 
+        --d.Pedido_Numero, 
+        m.Pedido_Numero,
+        m.Detalle_Factura_Precio, 
+        m.Detalle_Factura_Cantidad
+    FROM gd_esquema.Maestra m
+        --JOIN DATA_DEALERS.Factura f ON m.Factura_Numero = f.Factura_Numero
+        --JOIN DATA_DEALERS.Detalle_Pedido d ON m.Pedido_Numero = d.Pedido_Numero
 END 
 GO
+    
 
 CREATE PROCEDURE DATA_DEALERS.migrate_envio
 AS
 BEGIN
-    INSERT INTO DATA_DEALERS.Envio (Envio_Numero, Envio_Factura, Envio_ImporteTraslado, Envio_ImporteSubida, Envio_Fecha_Programada, Envio_Fecha_Entrega)
-    SELECT DISTINCT 
-        Envio_Numero, 
-        Envio_Factura, 
-        Envio_ImporteTraslado, 
-        Envio_ImporteSubida, 
-        Envio_Fecha_Programada, 
-        Envio_Fecha_Entrega
-    FROM gd_esquema.Maestra
-END 
-GO*/
-CREATE PROCEDURE DATA_DEALERS.migrate_factura
-AS
-BEGIN
-    INSERT INTO DATA_DEALERS.Factura (Factura_Numero, Factura_Sucursal, Factura_Cliente, Factura_Fecha, Factura_Total)
-    SELECT DISTINCT 
-        s.Sucursal_NroSucursal,
-        c.Cliente_Id,
-        m.Factura_Numero
-        m.Factura_Fecha, 
-        m.Factura_Total
+    INSERT INTO DATA_DEALERS.Envio (Envio_Factura, Envio_ImporteTraslado, Envio_ImporteSubida, Envio_Fecha_Programada, Envio_Fecha_Entrega)
+    SELECT 
+        m.Factura_Numero, 
+        m.Envio_ImporteTraslado, 
+        m.Envio_ImporteSubida, 
+        m.Envio_Fecha_Programada, 
+        m.Envio_Fecha
     FROM gd_esquema.Maestra m
-        JOIN DATA_DEALERS.Sucursal s ON s.Sucursal_NroSucursal = m.Factura_Sucursal
-        JOIN DATA_DEALERS.Cliente c ON c.Cliente_Id = m.Factura_Cliente
-    WHERE m.Factura_Numero IS NOT NULL
+    WHERE m.Envio_Numero IS NOT NULL 
+    GROUP BY
+        m.Envio_Numero,
+        m.Factura_Numero, 
+        m.Envio_ImporteTraslado, 
+        m.Envio_ImporteSubida, 
+        m.Envio_Fecha_Programada, 
+        m.Envio_Fecha
+    ORDER BY m.Envio_Numero
 END 
 GO
-
 
 -- Compras
 CREATE PROCEDURE DATA_DEALERS.migrate_proveedor
@@ -679,12 +648,16 @@ AS
 BEGIN
     INSERT INTO DATA_DEALERS.Proveedor (Proveedor_Cuit, Proveedor_Direccion, Proveedor_RazonSocial, Proveedor_Telefono, Proveedor_Mail)
     SELECT DISTINCT 
-        Proveedor_Cuit, 
-        Proveedor_Direccion, 
-        Proveedor_RazonSocial, 
-        Proveedor_Telefono, 
-        Proveedor_Mail
-    FROM gd_esquema.Maestra
+        m.Proveedor_Cuit, 
+        d.Direccion_Codigo, 
+        m.Proveedor_RazonSocial, 
+        m.Proveedor_Telefono, 
+        m.Proveedor_Mail
+    FROM gd_esquema.Maestra m
+    JOIN DATA_DEALERS.Provincia p ON m.Proveedor_Provincia = p.Provincia_Nombre
+    JOIN DATA_DEALERS.Localidad l ON m.Proveedor_Localidad = l.Localidad_Nombre AND p.Provincia_Codigo = l.Provincia_Codigo 
+    JOIN DATA_DEALERS.Direccion d ON m.Proveedor_Direccion = d.Direccion_Nombre AND l.Localidad_Codigo = d.Localidad_Codigo
+    WHERE Proveedor_Cuit IS NOT NULL
 END 
 GO
 
@@ -692,12 +665,20 @@ CREATE PROCEDURE DATA_DEALERS.migrate_compra
 AS
 BEGIN
     INSERT INTO DATA_DEALERS.Compra (Compra_Proveedor, Compra_Sucursal, Compra_Fecha, Compra_Total)
-    SELECT DISTINCT 
-        Compra_Proveedor, 
-        Compra_Sucursal, 
-        Compra_Fecha, 
-        Compra_Total
-    FROM gd_esquema.Maestra
+    SELECT 
+        m.Proveedor_Cuit, 
+        m.Sucursal_NroSucursal, 
+        m.Compra_Fecha, 
+        m.Compra_Total
+    FROM gd_esquema.Maestra m
+    WHERE m.Compra_Numero IS NOT NULL
+    GROUP BY
+        m.Compra_Numero,
+        m.Proveedor_Cuit, 
+        m.Sucursal_NroSucursal, 
+        m.Compra_Fecha, 
+        m.Compra_Total
+    ORDER BY m.Compra_Numero
 END 
 GO
 
@@ -712,6 +693,7 @@ BEGIN
         Detalle_Compra_Precio, 
         Detalle_Compra_Cantidad
     FROM gd_esquema.Maestra
+    WHERE  IS NOT NULL 
 END 
 GO
 
@@ -765,10 +747,13 @@ DELETE DATA_DEALERS.sillon_modelo
 DELETE DATA_DEALERS.sillon_medida
 DELETE DATA_DEALERS.sillon
 DELETE DATA_DEALERS.material_por_sillon
-DELETE DATA_DEALERS.migrate_provincia
-DELETE DATA_DEALERS.migrate_localidad
-DELETE DATA_DEALERS.migrate_direccion
-DELETE DATA_DEALERS.migrate_sucursal
+DELETE DATA_DEALERS.provincia
+DELETE DATA_DEALERS.localidad
+DELETE DATA_DEALERS.direccion
+DELETE DATA_DEALERS.sucursal
+DELETE DATA_DEALERS.cliente
+DELETE DATA_DEALERS.pedido
+DELETE DATA_DEALERS.pedido_cancelacion
 
 --------- IDENT_RESET ---------
 
@@ -777,3 +762,8 @@ DBCC CHECKIDENT ('DATA_DEALERS.sillon_medida', RESEED, -1);
 DBCC CHECKIDENT ('DATA_DEALERS.Provincia', RESEED, -1);
 DBCC CHECKIDENT ('DATA_DEALERS.Localidad', RESEED, -1);
 DBCC CHECKIDENT ('DATA_DEALERS.Direccion', RESEED, -1);
+DBCC CHECKIDENT ('DATA_DEALERS.Cliente', RESEED, -1);
+DBCC CHECKIDENT ('DATA_DEALERS.Pedido', RESEED, 56360502);
+DBCC CHECKIDENT ('DATA_DEALERS.Factura', RESEED, 46118857);
+DBCC CHECKIDENT ('DATA_DEALERS.Envio', RESEED, 90664927);
+DBCC CHECKIDENT ('DATA_DEALERS.Compra', RESEED, 12242152);
