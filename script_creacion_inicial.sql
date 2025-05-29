@@ -3,7 +3,12 @@ USE GD1C2025
 -- Decision de disenio: NO TENDRAN IDENTITY Sucursal, Sillon_Codigo ni Sillon_Modelo (pq van dando saltos)
 -- Decision de disenio: Los totales de compra, pedido y sucursal deben si o si cargarse manualmente. Esto es porque en la tabla maestra hay campos mal calculados los cuales se deben respetar (y una compra se crea antes que sus detalles)
 
+----------------------------- CREACION DE ESTRUCTURAS -----------------------------
+
+--------- TABLAS ---------
+
 -- Materiales
+
 CREATE TABLE DATA_DEALERS.Material(
     Material_Codigo BIGINT PRIMARY KEY IDENTITY(0, 1),
     Material_Nombre NVARCHAR(255) NOT NULL,
@@ -30,6 +35,7 @@ CREATE TABLE DATA_DEALERS.Relleno(
 )
 
 -- Sillones
+
 CREATE TABLE DATA_DEALERS.Sillon_Modelo(
     Sillon_Modelo_Codigo BIGINT PRIMARY KEY,
     Sillon_Modelo NVARCHAR(255) NOT NULL,
@@ -153,10 +159,11 @@ CREATE TABLE DATA_DEALERS.Envio(
     Envio_ImporteSubida DECIMAL(18,2) DEFAULT 0  CHECK (Envio_ImporteSubida > 0), -- Decision de diseño el default 0
     Envio_Total DECIMAL(18, 2), -- CHECK o ALIAS o TRIGGER: CONSULTAR
     Envio_Fecha_Programada DATETIME2(0) NOT NULL,
-    Envio_Fecha_Entrega DATETIME2(0) -- Decision de diseño
+    Envio_Fecha DATETIME2(0) -- Decision de diseño
 )
 
 -- Compras
+
 CREATE TABLE DATA_DEALERS.Proveedor(
     Proveedor_Cuit NVARCHAR(255) PRIMARY KEY,
     Proveedor_Direccion BIGINT REFERENCES DATA_DEALERS.Direccion NOT NULL,
@@ -184,49 +191,119 @@ CREATE TABLE DATA_DEALERS.Detalle_Compra(
 )
 GO
 
--- Triggers
-CREATE TRIGGER Calcular_Compra_Subtotal -- Si no se especifico un subtotal, se calcula
+--------- TRIGGERS ---------
+
+CREATE TRIGGER Insertar_Detalle_Compra -- Justificacion Diseño: Inserto el Detalle_Compra_Numero y si no se puso subtotal se calcula
 ON DATA_DEALERS.Detalle_Compra
-AFTER INSERT
+INSTEAD OF INSERT
 AS
 BEGIN
-    UPDATE dc
-    SET Detalle_Compra_Subtotal = i.Detalle_Compra_Precio * i.Detalle_Compra_Cantidad
-    FROM DATA_DEALERS.Detalle_Compra dc
-    JOIN inserted i
-        ON dc.Detalle_Compra_Codigo = i.Detalle_Compra_Codigo
-        AND dc.Compra_Numero = i.Compra_Numero
-    WHERE i.Detalle_Compra_Subtotal IS NULL
+    DECLARE @Compra_Numero DECIMAL(18,0), @Detalle_Compra_Material BIGINT, @Detalle_Compra_Precio DECIMAL(18,2), @Detalle_Compra_Cantidad DECIMAL(18,0), @Detalle_Compra_Subtotal DECIMAL(18,2), @Detalle_Compra_Codigo BIGINT
+
+    DECLARE Cursor_Detalle CURSOR FOR
+        SELECT 
+            i.Compra_Numero,
+            i.Detalle_Compra_Material,
+            i.Detalle_Compra_Precio,
+            i.Detalle_Compra_Cantidad,
+            ISNULL(i.Detalle_Compra_Subtotal, i.Detalle_Compra_Precio * i.Detalle_Compra_Cantidad)
+        FROM inserted i
+
+    OPEN Cursor_Detalle
+
+    FETCH Cursor_Detalle INTO @Compra_Numero, @Detalle_Compra_Material, @Detalle_Compra_Precio, @Detalle_Compra_Cantidad, @Detalle_Compra_Subtotal
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Buscar el siguiente numero de detalle para la compra
+        SELECT @Detalle_Compra_Codigo = COUNT(*) 
+        FROM DATA_DEALERS.Detalle_Compra
+        WHERE Compra_Numero = @Compra_Numero
+
+        INSERT INTO DATA_DEALERS.Detalle_Compra (Detalle_Compra_Codigo, Compra_Numero, Detalle_Compra_Material, Detalle_Compra_Precio, Detalle_Compra_Cantidad, Detalle_Compra_Subtotal)
+        VALUES (@Detalle_Compra_Codigo, @Compra_Numero, @Detalle_Compra_Material, @Detalle_Compra_Precio, @Detalle_Compra_Cantidad, @Detalle_Compra_Subtotal)
+
+        FETCH Cursor_Detalle INTO @Compra_Numero, @Detalle_Compra_Material, @Detalle_Compra_Precio, @Detalle_Compra_Cantidad, @Detalle_Compra_Subtotal
+    END
+
+    CLOSE Cursor_Detalle
+    DEALLOCATE Cursor_Detalle
 END
 GO
 
-CREATE TRIGGER Calcular_Pedido_Subtotal -- Si no se especifico un subtotal, se calcula
+CREATE TRIGGER Insertar_Detalle_Pedido
 ON DATA_DEALERS.Detalle_Pedido
-AFTER INSERT
+INSTEAD OF INSERT
 AS
 BEGIN
-    UPDATE dp
-    SET Detalle_Pedido_Subtotal = i.Detalle_Pedido_Precio * i.Detalle_Pedido_Cantidad
-    FROM DATA_DEALERS.Detalle_Pedido dp
-    JOIN inserted i
-        ON dp.Detalle_Pedido_Numero = i.Detalle_Pedido_Numero
-        AND dp.Pedido_Numero = i.Pedido_Numero
-    WHERE i.Detalle_Pedido_Subtotal IS NULL
+    DECLARE @Pedido_Numero DECIMAL(18,0), @Detalle_Sillon BIGINT, @Detalle_Pedido_Precio DECIMAL(18,2), @Detalle_Pedido_Cantidad BIGINT, @Detalle_Pedido_Subtotal DECIMAL(18,2), @Detalle_Pedido_Numero BIGINT
+
+    DECLARE Cursor_Detalle CURSOR FOR
+        SELECT 
+            i.Pedido_Numero,
+            i.Detalle_Sillon,
+            i.Detalle_Pedido_Precio,
+            i.Detalle_Pedido_Cantidad,
+            ISNULL(i.Detalle_Pedido_Subtotal, i.Detalle_Pedido_Precio * i.Detalle_Pedido_Cantidad)
+        FROM inserted i
+
+    OPEN Cursor_Detalle
+
+    FETCH Cursor_Detalle INTO @Pedido_Numero, @Detalle_Sillon, @Detalle_Pedido_Precio, @Detalle_Pedido_Cantidad, @Detalle_Pedido_Subtotal
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Buscar el siguiente numero de detalle para el pedido
+        SELECT @Detalle_Pedido_Numero = COUNT(*) 
+        FROM DATA_DEALERS.Detalle_Pedido
+        WHERE Pedido_Numero = @Pedido_Numero
+
+        INSERT INTO DATA_DEALERS.Detalle_Pedido (Detalle_Pedido_Numero, Pedido_Numero, Detalle_Sillon, Detalle_Pedido_Precio, Detalle_Pedido_Cantidad, Detalle_Pedido_Subtotal)
+        VALUES (@Detalle_Pedido_Numero, @Pedido_Numero, @Detalle_Sillon, @Detalle_Pedido_Precio, @Detalle_Pedido_Cantidad, @Detalle_Pedido_Subtotal)
+
+        FETCH Cursor_Detalle INTO @Pedido_Numero, @Detalle_Sillon, @Detalle_Pedido_Precio, @Detalle_Pedido_Cantidad, @Detalle_Pedido_Subtotal
+    END
+
+    CLOSE Cursor_Detalle
+    DEALLOCATE Cursor_Detalle
 END
 GO
 
-CREATE TRIGGER Calcular_Factura_Subtotal -- Si no se especifico un subtotal, se calcula
+CREATE TRIGGER Insertar_Detalle_Factura
 ON DATA_DEALERS.Detalle_Factura
-AFTER INSERT
+INSTEAD OF INSERT
 AS
 BEGIN
-    UPDATE df
-    SET Detalle_Factura_Subtotal = i.Detalle_Factura_Precio * i.Detalle_Factura_Cantidad
-    FROM DATA_DEALERS.Detalle_Factura df
-    JOIN inserted i
-        ON df.Detalle_Factura_Numero = i.Detalle_Factura_Numero
-        AND df.Factura_Numero = i.Factura_Numero
-    WHERE i.Detalle_Factura_Subtotal IS NULL
+    DECLARE @Factura_Numero BIGINT, @Pedido_Numero DECIMAL(18,0), @Detalle_Factura_Precio DECIMAL(18,2), @Detalle_Factura_Cantidad DECIMAL(18,0), @Detalle_Factura_Subtotal DECIMAL(18,2), @Detalle_Factura_Numero BIGINT
+
+    DECLARE Cursor_Detalle CURSOR FOR
+        SELECT 
+            i.Factura_Numero,
+            i.Pedido_Numero,
+            i.Detalle_Factura_Precio,
+            i.Detalle_Factura_Cantidad,
+            ISNULL(i.Detalle_Factura_Subtotal, i.Detalle_Factura_Precio * i.Detalle_Factura_Cantidad)
+        FROM inserted i
+
+    OPEN Cursor_Detalle
+
+    FETCH Cursor_Detalle INTO @Factura_Numero, @Pedido_Numero, @Detalle_Factura_Precio, @Detalle_Factura_Cantidad, @Detalle_Factura_Subtotal
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Buscar el siguiente numero de detalle para la factura
+        SELECT @Detalle_Factura_Numero = COUNT(*) 
+        FROM DATA_DEALERS.Detalle_Factura
+        WHERE Factura_Numero = @Factura_Numero
+
+        INSERT INTO DATA_DEALERS.Detalle_Factura (Factura_Numero, Detalle_Factura_Numero, Pedido_Numero, Detalle_Factura_Precio, Detalle_Factura_Cantidad, Detalle_Factura_Subtotal)
+        VALUES (@Factura_Numero, @Detalle_Factura_Numero, @Pedido_Numero, @Detalle_Factura_Precio, @Detalle_Factura_Cantidad, @Detalle_Factura_Subtotal)
+
+        FETCH Cursor_Detalle INTO @Factura_Numero, @Pedido_Numero, @Detalle_Factura_Precio, @Detalle_Factura_Cantidad, @Detalle_Factura_Subtotal
+    END
+
+    CLOSE Cursor_Detalle
+    DEALLOCATE Cursor_Detalle
 END
 GO
 
@@ -266,18 +343,27 @@ BEGIN
         HAVING COUNT(DISTINCT mat.Material_Tipo) <> COUNT(*)
     )
     BEGIN
-        THROW 50001, 'Error: Los materiales de cada sillon deben ser de tipos distintos: Madera, Tela y Relleno.', 1;
+        THROW 50001, 'Error: Los materiales de cada sillon deben ser de tipos distintos: Madera, Tela y Relleno.', 1
     END
 END 
 GO
 
---------------------------------- MIGRACION ---------------------------------
+----------- INDICES ------------
 
+CREATE INDEX ix_detalle_pedido ON DATA_DEALERS.Detalle_Pedido (Pedido_Numero, Detalle_Sillon)
+CREATE INDEX ix_detalle_compra ON DATA_DEALERS.Detalle_Compra (Compra_Numero, Detalle_Compra_Material)
+CREATE INDEX ix_detalle_factura ON DATA_DEALERS.Detalle_Factura (Factura_Numero, Pedido_Numero)
+CREATE INDEX ix_direccion ON DATA_DEALERS.Direccion (Localidad_Codigo)
+CREATE INDEX ix_localidad ON DATA_DEALERS.Localidad (Provincia_Codigo)
+CREATE INDEX ix_cliente ON DATA_DEALERS.Cliente (Cliente_Dni)
+GO
+
+--------------------------------- MIGRACION ---------------------------------
 
 --------- PROCEDURES ---------
 
-
 -- Materiales
+
 CREATE PROCEDURE DATA_DEALERS.migrate_material
 AS BEGIN
     INSERT DATA_DEALERS.Material (Material_Nombre, Material_Tipo, Material_Precio, Material_Descripcion)
@@ -333,6 +419,7 @@ END
 GO
 
 -- Sillones
+
 CREATE PROCEDURE DATA_DEALERS.migrate_sillon_modelo
 AS
 BEGIN
@@ -472,6 +559,7 @@ END
 GO
 
 -- Sucursal
+
 CREATE PROCEDURE DATA_DEALERS.migrate_sucursal
 AS
 BEGIN
@@ -555,27 +643,20 @@ GO
 CREATE PROCEDURE DATA_DEALERS.migrate_detalle_pedido
 AS
 BEGIN
-
-    INSERT INTO DATA_DEALERS.Detalle_Pedido (Detalle_Pedido_Numero, Pedido_Numero, Detalle_Sillon, Detalle_Pedido_Precio, Detalle_Pedido_Cantidad)
+    INSERT INTO DATA_DEALERS.Detalle_Pedido (Pedido_Numero, Detalle_Sillon, Detalle_Pedido_Precio, Detalle_Pedido_Cantidad, Detalle_Pedido_Subtotal)
     SELECT DISTINCT 
-        /*(   SELECT COUNT(*) 
-            FROM DATA_DEALERS.Detalle_Pedido dp
-            WHERE dp.Pedido_Numero = m.Pedido_Numero
-        ),*/
-        ROW_NUMBER() OVER (PARTITION BY m.Pedido_Numero ORDER BY m.Pedido_Numero, m.Sillon_Codigo) - 1 AS Detalle_Pedido_Numero,
-        m.Pedido_Numero, 
-        m.Sillon_Codigo, 
-        m.Detalle_Pedido_Precio, 
-        m.Detalle_Pedido_Cantidad
-    FROM gd_esquema.Maestra m
-    WHERE m.Pedido_Numero IS NOT NULL
-    AND m.Sillon_Codigo IS NOT NULL
-    AND m.Detalle_Pedido_Precio IS NOT NULL
-    AND m.Detalle_Pedido_Cantidad IS NOT NULL
+        Pedido_Numero, 
+        Sillon_Codigo, 
+        Detalle_Pedido_Precio, 
+        Detalle_Pedido_Cantidad,
+        Detalle_Pedido_Subtotal
+    FROM gd_esquema.Maestra
+    WHERE Sillon_Codigo IS NOT NULL
 END 
 GO
 
 -- Facturas
+
 CREATE PROCEDURE DATA_DEALERS.migrate_factura
 AS
 BEGIN
@@ -603,26 +684,23 @@ GO
 CREATE PROCEDURE DATA_DEALERS.migrate_detalle_factura
 AS
 BEGIN
-    INSERT INTO DATA_DEALERS.Detalle_Factura (Factura_Numero, Detalle_Factura_Numero, Pedido_Numero, Detalle_Factura_Precio, Detalle_Factura_Cantidad)
+    INSERT INTO DATA_DEALERS.Detalle_Factura (Factura_Numero, Pedido_Numero, Detalle_Factura_Precio, Detalle_Factura_Cantidad, Detalle_Factura_Subtotal)
     SELECT DISTINCT 
-        --f.Factura_Numero, 
-        m.Factura_Numero,
-        m.Detalle_Factura_Numero, 
-        --d.Pedido_Numero, 
-        m.Pedido_Numero,
-        m.Detalle_Factura_Precio, 
-        m.Detalle_Factura_Cantidad
-    FROM gd_esquema.Maestra m
-        --JOIN DATA_DEALERS.Factura f ON m.Factura_Numero = f.Factura_Numero
-        --JOIN DATA_DEALERS.Detalle_Pedido d ON m.Pedido_Numero = d.Pedido_Numero
+        Factura_Numero,
+        Pedido_Numero,
+        Detalle_Factura_Precio, 
+        Detalle_Factura_Cantidad,
+        Detalle_Factura_Subtotal
+    FROM gd_esquema.Maestra
+    WHERE Factura_Numero IS NOT NULL
+    AND Pedido_Numero IS NOT NULL
 END 
 GO
-    
 
 CREATE PROCEDURE DATA_DEALERS.migrate_envio
 AS
 BEGIN
-    INSERT INTO DATA_DEALERS.Envio (Envio_Factura, Envio_ImporteTraslado, Envio_ImporteSubida, Envio_Fecha_Programada, Envio_Fecha_Entrega)
+    INSERT INTO DATA_DEALERS.Envio (Envio_Factura, Envio_ImporteTraslado, Envio_ImporteSubida, Envio_Fecha_Programada, Envio_Fecha)
     SELECT 
         m.Factura_Numero, 
         m.Envio_ImporteTraslado, 
@@ -643,6 +721,7 @@ END
 GO
 
 -- Compras
+
 CREATE PROCEDURE DATA_DEALERS.migrate_proveedor
 AS
 BEGIN
@@ -685,15 +764,16 @@ GO
 CREATE PROCEDURE DATA_DEALERS.migrate_detalle_compra
 AS
 BEGIN
-    INSERT INTO DATA_DEALERS.Detalle_Compra (Detalle_Compra_Codigo, Compra_Numero, Detalle_Compra_Material, Detalle_Compra_Precio, Detalle_Compra_Cantidad)
+    INSERT INTO DATA_DEALERS.Detalle_Compra (Compra_Numero, Detalle_Compra_Material, Detalle_Compra_Precio, Detalle_Compra_Cantidad, Detalle_Compra_Subtotal)
     SELECT DISTINCT 
-        Detalle_Compra_Codigo, 
-        Compra_Numero, 
-        Detalle_Compra_Material, 
-        Detalle_Compra_Precio, 
-        Detalle_Compra_Cantidad
-    FROM gd_esquema.Maestra
-    WHERE  IS NOT NULL 
+        m.Compra_Numero, 
+        mat.Material_Codigo, 
+        m.Detalle_Compra_Precio, 
+        m.Detalle_Compra_Cantidad,
+        m.Detalle_Compra_Subtotal
+    FROM gd_esquema.Maestra m
+        JOIN DATA_DEALERS.Material mat ON m.Material_Nombre = mat.Material_Nombre
+    WHERE m.Compra_Numero IS NOT NULL
 END 
 GO
 
@@ -736,34 +816,3 @@ EXEC DATA_DEALERS.migrate_envio
 EXEC DATA_DEALERS.migrate_proveedor
 EXEC DATA_DEALERS.migrate_compra
 EXEC DATA_DEALERS.migrate_detalle_compra
-
---------- DELETES ---------
-
-DELETE DATA_DEALERS.material
-DELETE DATA_DEALERS.tela
-DELETE DATA_DEALERS.madera
-DELETE DATA_DEALERS.relleno
-DELETE DATA_DEALERS.sillon_modelo
-DELETE DATA_DEALERS.sillon_medida
-DELETE DATA_DEALERS.sillon
-DELETE DATA_DEALERS.material_por_sillon
-DELETE DATA_DEALERS.provincia
-DELETE DATA_DEALERS.localidad
-DELETE DATA_DEALERS.direccion
-DELETE DATA_DEALERS.sucursal
-DELETE DATA_DEALERS.cliente
-DELETE DATA_DEALERS.pedido
-DELETE DATA_DEALERS.pedido_cancelacion
-
---------- IDENT_RESET ---------
-
-DBCC CHECKIDENT ('DATA_DEALERS.Material', RESEED, -1);
-DBCC CHECKIDENT ('DATA_DEALERS.sillon_medida', RESEED, -1);
-DBCC CHECKIDENT ('DATA_DEALERS.Provincia', RESEED, -1);
-DBCC CHECKIDENT ('DATA_DEALERS.Localidad', RESEED, -1);
-DBCC CHECKIDENT ('DATA_DEALERS.Direccion', RESEED, -1);
-DBCC CHECKIDENT ('DATA_DEALERS.Cliente', RESEED, -1);
-DBCC CHECKIDENT ('DATA_DEALERS.Pedido', RESEED, 56360502);
-DBCC CHECKIDENT ('DATA_DEALERS.Factura', RESEED, 46118857);
-DBCC CHECKIDENT ('DATA_DEALERS.Envio', RESEED, 90664927);
-DBCC CHECKIDENT ('DATA_DEALERS.Compra', RESEED, 12242152);
