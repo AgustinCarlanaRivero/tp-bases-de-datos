@@ -1,7 +1,6 @@
-USE GD1C2025
+-- Aclaracion: Lo que no esta comentado en el codigo, esta en el archivo Estrategia.pdf
 
--- Decision de disenio: NO TENDRAN IDENTITY Sucursal, Sillon_Codigo ni Sillon_Modelo (pq van dando saltos)
--- Decision de disenio: Los totales de compra, pedido y sucursal deben si o si cargarse manualmente. Esto es porque en la tabla maestra hay campos mal calculados los cuales se deben respetar (y una compra se crea antes que sus detalles)
+USE GD1C2025 -- Asegurarse de usar la base de datos correcta
 
 ----------------------------- CREACION DE ESTRUCTURAS -----------------------------
 
@@ -13,8 +12,8 @@ CREATE TABLE DATA_DEALERS.Material(
     Material_Codigo BIGINT PRIMARY KEY IDENTITY(0, 1),
     Material_Nombre NVARCHAR(255) NOT NULL,
     Material_Tipo NVARCHAR(255) NOT NULL CHECK (Material_Tipo IN ('Madera', 'Relleno', 'Tela')),
-    Material_Precio DECIMAL(38, 2) NOT NULL CHECK (Material_Precio > 0), -- Justificacion de Diseño: Precios y Cantidades > 0
-    Material_Descripcion NVARCHAR(255) -- Justificacion de Diseño
+    Material_Precio DECIMAL(38, 2) NOT NULL CHECK (Material_Precio > 0),
+    Material_Descripcion NVARCHAR(255)
 )
 
 CREATE TABLE DATA_DEALERS.Tela(
@@ -87,7 +86,7 @@ CREATE TABLE DATA_DEALERS.Direccion(
 CREATE TABLE DATA_DEALERS.Sucursal(
     Sucursal_NroSucursal BIGINT PRIMARY KEY,
     Sucursal_Direccion BIGINT REFERENCES DATA_DEALERS.Direccion NOT NULL,
-    Sucursal_Mail NVARCHAR(255) NOT NULL, -- Decision de diseño
+    Sucursal_Mail NVARCHAR(255) NOT NULL,
     Sucursal_telefono NVARCHAR(255) NOT NULL
 )
 
@@ -96,12 +95,12 @@ CREATE TABLE DATA_DEALERS.Sucursal(
 CREATE TABLE DATA_DEALERS.Cliente(
     Cliente_Id BIGINT PRIMARY KEY IDENTITY(0, 1),
     Cliente_Direccion BIGINT REFERENCES DATA_DEALERS.Direccion,
-    Cliente_Dni BIGINT, -- Decision de Diseño CONSULTAR
-    Cliente_Nombre NVARCHAR(255), -- Decision de Diseño
-    Cliente_Apellido NVARCHAR(255), -- Decision de Diseño
-    Cliente_FechaNacimiento DATETIME2(6), -- Decision de Diseño
-    Cliente_mail NVARCHAR(255), -- Decision de Diseño
-    Cliente_telefono NVARCHAR(255) -- Decision de Diseño
+    Cliente_Dni BIGINT NOT NULL,
+    Cliente_Nombre NVARCHAR(255) NOT NULL,
+    Cliente_Apellido NVARCHAR(255) NOT NULL,
+    Cliente_FechaNacimiento DATETIME2(6) NOT NULL,
+    Cliente_mail NVARCHAR(255) NOT NULL,
+    Cliente_telefono NVARCHAR(255) NOT NULL
 )
 
 -- Pedidos
@@ -111,14 +110,14 @@ CREATE TABLE DATA_DEALERS.Pedido(
     Pedido_Sucursal BIGINT NOT NULL REFERENCES DATA_DEALERS.Sucursal,
     Pedido_Cliente BIGINT NOT NULL REFERENCES DATA_DEALERS.Cliente,
     Pedido_Estado NVARCHAR(255) NOT NULL CHECK (Pedido_Estado IN ('ENTREGADO', 'CANCELADO', 'PENDIENTE')),
-    Pedido_Fecha DATETIME2(6) DEFAULT SYSDATETIME(), -- Decision de Diseño
+    Pedido_Fecha DATETIME2(6) DEFAULT SYSDATETIME(),
     Pedido_Total DECIMAL(18,2) NOT NULL
 )
 
 CREATE TABLE DATA_DEALERS.Pedido_Cancelacion(
     Pedido_Numero DECIMAL(18,0) PRIMARY KEY REFERENCES DATA_DEALERS.Pedido,
     Pedido_Cancelacion_Fecha DATETIME2(6) DEFAULT SYSDATETIME(),
-    Pedido_Cancelacion_Motivo VARCHAR(255) DEFAULT 'Sin Motivo' -- Decision de Diseño   
+    Pedido_Cancelacion_Motivo VARCHAR(255) DEFAULT 'Sin Motivo'
 )
 
 CREATE TABLE DATA_DEALERS.Detalle_Pedido(
@@ -137,7 +136,7 @@ CREATE TABLE DATA_DEALERS.Factura(
     Factura_Numero BIGINT PRIMARY KEY IDENTITY(46118858, 1),
     Factura_Sucursal BIGINT REFERENCES DATA_DEALERS.Sucursal NOT NULL,
     Factura_Cliente BIGINT REFERENCES DATA_DEALERS.Cliente NOT NULL,
-    Factura_Fecha DATETIME2(6) DEFAULT SYSDATETIME(), -- Decision de Diseño
+    Factura_Fecha DATETIME2(6) DEFAULT SYSDATETIME(),
     Factura_Total DECIMAL(38,2) NOT NULL
 )
 
@@ -156,10 +155,10 @@ CREATE TABLE DATA_DEALERS.Envio(
     Envio_Numero DECIMAL(18,0) PRIMARY KEY IDENTITY(90664928,1),
     Envio_Factura BIGINT REFERENCES DATA_DEALERS.Factura NOT NULL,
     Envio_ImporteTraslado DECIMAL(18,2) NOT NULL CHECK (Envio_ImporteTraslado > 0),
-    Envio_ImporteSubida DECIMAL(18,2) DEFAULT 0  CHECK (Envio_ImporteSubida > 0), -- Decision de diseño el default 0
-    Envio_Total DECIMAL(18, 2), -- CHECK o ALIAS o TRIGGER: CONSULTAR
+    Envio_ImporteSubida DECIMAL(18,2) DEFAULT 0 CHECK (Envio_ImporteSubida > 0),
+    Envio_Total DECIMAL(18, 2),
     Envio_Fecha_Programada DATETIME2(0) NOT NULL,
-    Envio_Fecha DATETIME2(0) -- Decision de diseño
+    Envio_Fecha DATETIME2(0)
 )
 
 -- Compras
@@ -168,15 +167,15 @@ CREATE TABLE DATA_DEALERS.Proveedor(
     Proveedor_Cuit NVARCHAR(255) PRIMARY KEY,
     Proveedor_Direccion BIGINT REFERENCES DATA_DEALERS.Direccion NOT NULL,
     Proveedor_RazonSocial NVARCHAR(255) NOT NULL,
-    Proveedor_Telefono NVARCHAR(255) NOT NULL, -- Decision de diseño
+    Proveedor_Telefono NVARCHAR(255) NOT NULL,
     Proveedor_Mail NVARCHAR(255) NOT NULL
 )
 
-CREATE TABLE DATA_DEALERS.Compra( -- Consulta (asi como esta, podes crear compra sin detalles, igual que pedido, y analogo a silones sin material_por_sillon)
+CREATE TABLE DATA_DEALERS.Compra(
     Compra_Numero DECIMAL(18, 0) PRIMARY KEY IDENTITY(12242153, 1), 
     Compra_Proveedor NVARCHAR(255) REFERENCES DATA_DEALERS.Proveedor NOT NULL,
     Compra_Sucursal BIGINT REFERENCES DATA_DEALERS.Sucursal NOT NULL,
-    Compra_Fecha DATETIME2(6) DEFAULT SYSDATETIME(), -- Decision de Diseño
+    Compra_Fecha DATETIME2(6) DEFAULT SYSDATETIME(),
     Compra_Total DECIMAL(18, 2) NOT NULL
 )
 
@@ -193,20 +192,23 @@ GO
 
 --------- TRIGGERS ---------
 
-CREATE TRIGGER Insertar_Detalle_Compra -- Justificacion Diseño: Inserto el Detalle_Compra_Numero y si no se puso subtotal se calcula
+-- Asignar un numero incremental al Detalle_Compra_Codigo y calcular subtotal si es que no fue calculado
+CREATE TRIGGER Insertar_Detalle_Compra
 ON DATA_DEALERS.Detalle_Compra
 INSTEAD OF INSERT
 AS
 BEGIN
+    -- Declaracion de variables para almacenar los valores de cada fila a insertar
     DECLARE @Compra_Numero DECIMAL(18,0), @Detalle_Compra_Material BIGINT, @Detalle_Compra_Precio DECIMAL(18,2), @Detalle_Compra_Cantidad DECIMAL(18,0), @Detalle_Compra_Subtotal DECIMAL(18,2), @Detalle_Compra_Codigo BIGINT
 
+    -- Cursor para recorrer todas las filas a insertar
     DECLARE Cursor_Detalle CURSOR FOR
         SELECT 
             i.Compra_Numero,
             i.Detalle_Compra_Material,
             i.Detalle_Compra_Precio,
             i.Detalle_Compra_Cantidad,
-            ISNULL(i.Detalle_Compra_Subtotal, i.Detalle_Compra_Precio * i.Detalle_Compra_Cantidad)
+            ISNULL(i.Detalle_Compra_Subtotal, i.Detalle_Compra_Precio * i.Detalle_Compra_Cantidad) -- Si el subtotal es NULL, se calcula
         FROM inserted i
 
     OPEN Cursor_Detalle
@@ -215,11 +217,12 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Buscar el siguiente numero de detalle para la compra
+        -- Calcula el siguiente numero de detalle para la compra (incremental por compra)
         SELECT @Detalle_Compra_Codigo = COUNT(*) 
         FROM DATA_DEALERS.Detalle_Compra
         WHERE Compra_Numero = @Compra_Numero
 
+        -- Inserta la fila en la tabla con el codigo incremental y el subtotal
         INSERT INTO DATA_DEALERS.Detalle_Compra (Detalle_Compra_Codigo, Compra_Numero, Detalle_Compra_Material, Detalle_Compra_Precio, Detalle_Compra_Cantidad, Detalle_Compra_Subtotal)
         VALUES (@Detalle_Compra_Codigo, @Compra_Numero, @Detalle_Compra_Material, @Detalle_Compra_Precio, @Detalle_Compra_Cantidad, @Detalle_Compra_Subtotal)
 
@@ -231,20 +234,23 @@ BEGIN
 END
 GO
 
+-- Asignar un numero incremental al Detalle_Pedido_Numero y calcular subtotal si es que no fue calculado
 CREATE TRIGGER Insertar_Detalle_Pedido
 ON DATA_DEALERS.Detalle_Pedido
 INSTEAD OF INSERT
 AS
 BEGIN
+    -- Declaracion de variables para almacenar los valores de cada fila a insertar
     DECLARE @Pedido_Numero DECIMAL(18,0), @Detalle_Sillon BIGINT, @Detalle_Pedido_Precio DECIMAL(18,2), @Detalle_Pedido_Cantidad BIGINT, @Detalle_Pedido_Subtotal DECIMAL(18,2), @Detalle_Pedido_Numero BIGINT
 
+    -- Cursor para recorrer todas las filas a insertar
     DECLARE Cursor_Detalle CURSOR FOR
         SELECT 
             i.Pedido_Numero,
             i.Detalle_Sillon,
             i.Detalle_Pedido_Precio,
             i.Detalle_Pedido_Cantidad,
-            ISNULL(i.Detalle_Pedido_Subtotal, i.Detalle_Pedido_Precio * i.Detalle_Pedido_Cantidad)
+            ISNULL(i.Detalle_Pedido_Subtotal, i.Detalle_Pedido_Precio * i.Detalle_Pedido_Cantidad) -- Si el subtotal es NULL, se calcula
         FROM inserted i
 
     OPEN Cursor_Detalle
@@ -253,11 +259,12 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Buscar el siguiente numero de detalle para el pedido
+        -- Buscar el siguiente numero de detalle para el pedido (incremental por pedido)
         SELECT @Detalle_Pedido_Numero = COUNT(*) 
         FROM DATA_DEALERS.Detalle_Pedido
         WHERE Pedido_Numero = @Pedido_Numero
 
+        -- Inserta la fila en la tabla con el numero incremental y el subtotal
         INSERT INTO DATA_DEALERS.Detalle_Pedido (Detalle_Pedido_Numero, Pedido_Numero, Detalle_Sillon, Detalle_Pedido_Precio, Detalle_Pedido_Cantidad, Detalle_Pedido_Subtotal)
         VALUES (@Detalle_Pedido_Numero, @Pedido_Numero, @Detalle_Sillon, @Detalle_Pedido_Precio, @Detalle_Pedido_Cantidad, @Detalle_Pedido_Subtotal)
 
@@ -269,20 +276,23 @@ BEGIN
 END
 GO
 
+-- Asignar un numero incremental al Detalle_Factura_Numero y calcular subtotal si es que no fue calculado
 CREATE TRIGGER Insertar_Detalle_Factura
 ON DATA_DEALERS.Detalle_Factura
 INSTEAD OF INSERT
 AS
 BEGIN
+    -- Declaracion de variables para almacenar los valores de cada fila a insertar
     DECLARE @Factura_Numero BIGINT, @Pedido_Numero DECIMAL(18,0), @Detalle_Factura_Precio DECIMAL(18,2), @Detalle_Factura_Cantidad DECIMAL(18,0), @Detalle_Factura_Subtotal DECIMAL(18,2), @Detalle_Factura_Numero BIGINT
 
+    -- Cursor para recorrer todas las filas a insertar
     DECLARE Cursor_Detalle CURSOR FOR
         SELECT 
             i.Factura_Numero,
             i.Pedido_Numero,
             i.Detalle_Factura_Precio,
             i.Detalle_Factura_Cantidad,
-            ISNULL(i.Detalle_Factura_Subtotal, i.Detalle_Factura_Precio * i.Detalle_Factura_Cantidad)
+            ISNULL(i.Detalle_Factura_Subtotal, i.Detalle_Factura_Precio * i.Detalle_Factura_Cantidad) -- Si el subtotal es NULL, se calcula
         FROM inserted i
 
     OPEN Cursor_Detalle
@@ -291,11 +301,12 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-        -- Buscar el siguiente numero de detalle para la factura
+        -- Buscar el siguiente numero de detalle para la factura (incremental por factura)
         SELECT @Detalle_Factura_Numero = COUNT(*) 
         FROM DATA_DEALERS.Detalle_Factura
         WHERE Factura_Numero = @Factura_Numero
 
+        -- Inserta la fila en la tabla con el numero incremental y el subtotal
         INSERT INTO DATA_DEALERS.Detalle_Factura (Factura_Numero, Detalle_Factura_Numero, Pedido_Numero, Detalle_Factura_Precio, Detalle_Factura_Cantidad, Detalle_Factura_Subtotal)
         VALUES (@Factura_Numero, @Detalle_Factura_Numero, @Pedido_Numero, @Detalle_Factura_Precio, @Detalle_Factura_Cantidad, @Detalle_Factura_Subtotal)
 
@@ -307,24 +318,27 @@ BEGIN
 END
 GO
 
-CREATE TRIGGER Calcular_Envio_Total -- Si no se especifico un total, se calcula
+-- Calcular el total del envio si no se especifico
+CREATE TRIGGER Calcular_Envio_Total
 ON DATA_DEALERS.Envio
 AFTER INSERT
 AS
 BEGIN
     UPDATE e
-    SET Envio_Total = i.Envio_ImporteTraslado + i.Envio_ImporteSubida
+    SET Envio_Total = i.Envio_ImporteTraslado + i.Envio_ImporteSubida -- El total es la suma de los importes
     FROM DATA_DEALERS.Envio e
         JOIN inserted i ON e.Envio_Numero = i.Envio_Numero
     WHERE i.Envio_Total IS NULL
 END
 GO
 
-CREATE TRIGGER Verificar_Material_Por_Sillon -- Decision de disenio los materiales se ponen los 3 a la vez
+-- Verificar que cada sillon tenga exactamente 3 materiales y de tipos distintos
+CREATE TRIGGER Verificar_Material_Por_Sillon
 ON DATA_DEALERS.Material_Por_Sillon
 AFTER INSERT, UPDATE, DELETE
 AS
 BEGIN
+    -- Primer verificacion: El sillon tiene exactamente 3 materiales_por_sillon
     IF EXISTS (
         SELECT 1
         FROM DATA_DEALERS.Material_Por_Sillon
@@ -335,6 +349,7 @@ BEGIN
         THROW 50000, 'Error: Cada sillon debe tener unicamente 3 materiales.', 1
     END
     
+    -- Segunda verificacion: Todos sus materiales son distintos entre si
     IF EXISTS (
         SELECT 1
         FROM DATA_DEALERS.Material_Por_Sillon mps
@@ -386,8 +401,8 @@ BEGIN
         m.Tela_Color, 
         m.Tela_Textura
     FROM gd_esquema.Maestra m
-        JOIN DATA_DEALERS.Material mat ON m.Material_Nombre = mat.Material_Nombre -- Justificacion de disenio: En la tabla maestra, no hay 2 materiales de mismo nombre y distintas caracteristicas
-    WHERE m.Tela_Color IS NOT NULL -- Justificacion de Disenio: Si uno es NULL, el otro tmb
+        JOIN DATA_DEALERS.Material mat ON m.Material_Nombre = mat.Material_Nombre
+    WHERE m.Tela_Color IS NOT NULL
 END
 GO
 
@@ -483,7 +498,7 @@ AS
 BEGIN
     INSERT INTO DATA_DEALERS.Provincia (Provincia_Nombre)
     SELECT DISTINCT 
-        Cliente_Provincia -- Decision de disenio: Los clientes tienen todas las provincias
+        Cliente_Provincia
     FROM gd_esquema.Maestra 
     WHERE Cliente_Provincia IS NOT NULL 
 END
@@ -616,7 +631,7 @@ BEGIN
         AND m.Cliente_Nombre = c.Cliente_Nombre
         AND m.Cliente_Apellido = c.Cliente_Apellido
     WHERE m.Pedido_Numero IS NOT NULL
-    GROUP BY -- Decision disenio: Usamos GROUP BY para poder ordenar por un campo que no este presente en el select (en 4 lados)
+    GROUP BY
         m.Pedido_Numero,
         m.Sucursal_NroSucursal, 
         c.Cliente_Id, 
@@ -779,6 +794,8 @@ GO
 
 --------- EXECUTES ---------
 
+-- Ejecuta los procedimientos de migracion para migrar los datos al nuevo esquema
+
 -- Materiales
 EXEC DATA_DEALERS.migrate_material
 EXEC DATA_DEALERS.migrate_tela
@@ -816,3 +833,42 @@ EXEC DATA_DEALERS.migrate_envio
 EXEC DATA_DEALERS.migrate_proveedor
 EXEC DATA_DEALERS.migrate_compra
 EXEC DATA_DEALERS.migrate_detalle_compra
+
+--------- BORRAR PROCEDURES ---------
+
+-- Elimina los procedimientos de migracion luego de ser utilizados
+
+DROP PROCEDURE DATA_DEALERS.migrate_material
+DROP PROCEDURE DATA_DEALERS.migrate_tela
+DROP PROCEDURE DATA_DEALERS.migrate_madera
+DROP PROCEDURE DATA_DEALERS.migrate_relleno
+DROP PROCEDURE DATA_DEALERS.migrate_sillon_modelo
+DROP PROCEDURE DATA_DEALERS.migrate_sillon_medida
+DROP PROCEDURE DATA_DEALERS.migrate_sillon
+DROP PROCEDURE DATA_DEALERS.migrate_material_por_sillon
+DROP PROCEDURE DATA_DEALERS.migrate_provincia
+DROP PROCEDURE DATA_DEALERS.migrate_localidad
+DROP PROCEDURE DATA_DEALERS.migrate_direccion
+DROP PROCEDURE DATA_DEALERS.migrate_sucursal
+DROP PROCEDURE DATA_DEALERS.migrate_cliente
+DROP PROCEDURE DATA_DEALERS.migrate_pedido
+DROP PROCEDURE DATA_DEALERS.migrate_pedido_cancelacion
+DROP PROCEDURE DATA_DEALERS.migrate_detalle_pedido
+DROP PROCEDURE DATA_DEALERS.migrate_factura
+DROP PROCEDURE DATA_DEALERS.migrate_detalle_factura
+DROP PROCEDURE DATA_DEALERS.migrate_envio
+DROP PROCEDURE DATA_DEALERS.migrate_proveedor
+DROP PROCEDURE DATA_DEALERS.migrate_compra
+DROP PROCEDURE DATA_DEALERS.migrate_detalle_compra
+
+--------- EXTRA: CORRECCION DE ERRORES ---------
+
+-- Corrige nombres de provincias mal cargadas
+
+UPDATE DATA_DEALERS.Provincia
+SET Provincia_Nombre = 'Tierra Del Fuego'
+WHERE Provincia_Nombre = 'Tierra Del Fue;'
+
+UPDATE DATA_DEALERS.Provincia
+SET Provincia_Nombre = 'Santiago Del Estero'
+WHERE Provincia_Nombre = 'Santia; Del Estero'
