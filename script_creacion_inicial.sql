@@ -2,6 +2,8 @@
 
 USE GD1C2025 -- Asegurarse de usar la base de datos correcta
 
+CREATE SCHEMA DATA_DEALERS -- Creacion de nuestro schema
+
 ----------------------------- CREACION DE ESTRUCTURAS -----------------------------
 
 --------- TABLAS ---------
