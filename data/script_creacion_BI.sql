@@ -92,7 +92,7 @@ CREATE TABLE DATA_DEALERS.BI_Hechos_Envios (
     Tiempo_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
     Ubicacion_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Ubicacion,
     Envio_Fecha_Programada DATETIME2(0) NOT NULL,
-    Envio_Fecha_Entrega DATETIME2(0),
+    Envio_Fecha DATETIME2(0),
     Envio_Total DECIMAL(18,2) NOT NULL
 )
 
@@ -435,7 +435,7 @@ GO
 CREATE PROCEDURE DATA_DEALERS.migrate_hechos_ventas
 AS
 BEGIN
-    -- Inserta los datos transformados en la tabla BI_Hechos_Ventas
+
     INSERT INTO DATA_DEALERS.BI_Hechos_Ventas(Detalle_Factura_Numero, Factura_Numero, Modelo_Sillon_Id, Rango_Etario_Id, Tiempo_Id, Ubicacion_Id, Sucursal_Id, Detalle_Subtotal, Detalle_Cantidad, Detalle_Tiempo_Fabricacion)
     SELECT 
         -- PKs
@@ -486,42 +486,95 @@ BEGIN
         JOIN DATA_DEALERS.BI_Dimension_Sucursal ds ON f.Factura_Sucursal = ds.Sucursal_NroSucursal
 END 
 GO
-/*
+
 CREATE PROCEDURE DATA_DEALERS.migrate_hechos_compras
 AS
 BEGIN
-    -- Inserta los datos transformados en la tabla BI_Hechos_Compras
-    INSERT INTO DATA_DEALERS.BI_Hechos_Compras(
-        Tiempo_Id, 
-        Sucursal_Id, 
-        Tipo_Material_Id, 
-        Detalle_Subtotal
-    )
-    SELECT 
+
+    INSERT INTO DATA_DEALERS.BI_Hechos_Compras(Detalle_Compra_Codigo, Compra_Numero, Tiempo_Id, Sucursal_Id, Tipo_Material_Id, Detalle_Subtotal)
+    SELECT
+        dc.Detalle_Compra_Codigo,
+        dc.Compra_Numero,
         t.Tiempo_Id,
-        ds.Sucursal_Id,
-        dt.Tipo_Material_Id,
-        SUM(dc.Detalle_Compra_Subtotal)
+        s.Sucursal_Id,
+        tm.Tipo_Material_Id,
+        dc.Detalle_Compra_Subtotal
     FROM DATA_DEALERS.Detalle_Compra dc
-        JOIN DATA_DEALERS.Compra c ON dc.Compra_Numero = c.Compra_Numero
-        
         -- Para obtener el id de la dimension tiempo
-        JOIN DATA_DEALERS.BI_Dimension_Tiempo t ON YEAR(c.Compra_Fecha) + DATEPART(QUARTER, c.Compra_Fecha) + MONTH(c.Compra_Fecha) = t.Anio + t.Cuatrimestre + t.Mes
+        JOIN DATA_DEALERS.Compra c ON dc.Compra_Numero = c.Compra_Numero
+        JOIN DATA_DEALERS.BI_Dimension_Tiempo t ON 
+            YEAR(c.Compra_Fecha) = t.Anio AND 
+            DATEPART(QUARTER, c.Compra_Fecha) = t.Cuatrimestre AND 
+            MONTH(c.Compra_Fecha) = t.Mes
         
         -- Para obtener el id de la dimension sucursal
-        JOIN DATA_DEALERS.Sucursal su ON c.Compra_Sucursal = su.Sucursal_NroSucursal
-        JOIN DATA_DEALERS.BI_Dimension_Sucursal ds ON su.Sucursal_NroSucursal = ds.Sucursal_NroSucursal
+        JOIN DATA_DEALERS.BI_Dimension_Sucursal s ON c.Compra_Sucursal = s.Sucursal_NroSucursal
         
         -- Para obtener el id de la dimension tipo material
         JOIN DATA_DEALERS.Material m ON dc.Detalle_Compra_Material = m.Material_Codigo
-        JOIN DATA_DEALERS.BI_Dimension_Tipo_Material dt ON m.Material_Tipo = dt.Tipo_Material
-    GROUP BY 
-        t.Tiempo_Id, 
-        ds.Sucursal_Id, 
-        dt.Tipo_Material_Id
+        JOIN DATA_DEALERS.BI_Dimension_Tipo_Material tm ON m.Material_Tipo = tm.Tipo_Material
 END
 GO
-*/
+
+CREATE PROCEDURE DATA_DEALERS.migrate_hechos_pedidos
+AS
+BEGIN
+
+    INSERT INTO DATA_DEALERS.BI_Hechos_Pedidos(Pedido_Numero, Tiempo_Id, Sucursal_Id, Estado_Pedido_Id, Turno_Ventas_Id)
+    SELECT 
+        p.Pedido_Numero,
+        t.Tiempo_Id,
+        s.Sucursal_Id,
+        e.Estado_Pedido_Id,
+        tv.Turno_Ventas_Id
+    FROM DATA_DEALERS.Pedido p
+        -- Para obtener el id de la dimension tiempo
+        JOIN DATA_DEALERS.BI_Dimension_Tiempo t ON 
+            YEAR(p.Pedido_Fecha) = t.Anio AND 
+            DATEPART(QUARTER, p.Pedido_Fecha) = t.Cuatrimestre AND 
+            MONTH(p.Pedido_Fecha) = t.Mes
+        
+        -- Para obtener el id de la dimension sucursal
+        JOIN DATA_DEALERS.BI_Dimension_Sucursal s ON p.Pedido_Sucursal = s.Sucursal_NroSucursal
+        
+        -- Para obtener el id de la dimension estado pedido
+        JOIN DATA_DEALERS.BI_Dimension_Estado_Pedido e ON p.Pedido_Estado = e.Estado_Pedido
+        
+        -- Para obtener el id de la dimension turno ventas
+        JOIN DATA_DEALERS.BI_Dimension_Turno_Ventas tv ON 
+            DATEPART(HOUR, p.Pedido_Fecha) BETWEEN tv.Horario_Minimo AND tv.Horario_Maximo
+END
+
+CREATE PROCEDURE DATA_DEALERS.migrate_hechos_envios
+AS 
+BEGIN
+
+    INSERT INTO DATA_DEALERS.BI_Hechos_Envios(Envio_Numero, Tiempo_Id, Ubicacion_Id, Envio_Fecha_Programada, Envio_Fecha, Envio_Total)
+    SELECT 
+        e.Envio_Numero,
+        t.Tiempo_Id,
+        u.Ubicacion_Id,
+        e.Envio_Fecha_Programada,
+        e.Envio_Fecha,
+        e.Envio_Total
+    FROM DATA_DEALERS.Envio e
+        -- Para obtener el id de la dimension tiempo
+        JOIN DATA_DEALERS.BI_Dimension_Tiempo t ON 
+            YEAR(e.Envio_Fecha_Programada) = t.Anio AND 
+            DATEPART(QUARTER, e.Envio_Fecha_Programada) = t.Cuatrimestre AND 
+            MONTH(e.Envio_Fecha_Programada) = t.Mes
+        
+        -- Para obtener el id de la dimension ubicacion
+        JOIN DATA_DEALERS.Factura f ON e.Envio_Factura = f.Factura_Numero
+        JOIN DATA_DEALERS.Cliente c ON f.Factura_Cliente = c.Cliente_Id
+        JOIN DATA_DEALERS.Direccion d ON c.Cliente_Direccion = d.Direccion_Codigo
+        JOIN DATA_DEALERS.Localidad l ON d.Localidad_Codigo = l.Localidad_Codigo
+        JOIN DATA_DEALERS.Provincia p ON l.Provincia_Codigo = p.Provincia_Codigo
+        JOIN DATA_DEALERS.BI_Dimension_Ubicacion u ON 
+            u.Localidad = l.Localidad_Nombre AND 
+            u.Provincia = p.Provincia_Nombre
+END
+
 --------- EXEC PROCEDURES ---------
 
 EXEC DATA_DEALERS.migrate_dimension_tiempo
