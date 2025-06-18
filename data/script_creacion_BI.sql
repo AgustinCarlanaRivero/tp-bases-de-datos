@@ -2,7 +2,12 @@
 
 USE GD1C2025 -- Asegurarse de usar la base de datos correcta
 
+----------------------------- CREACION DE ESTRUCTURAS -----------------------------
+
+--------- TABLAS ---------
+
 -- Dimensiones
+
 CREATE TABLE DATA_DEALERS.BI_Dimension_Tiempo (
     Tiempo_Id BIGINT PRIMARY KEY IDENTITY(0, 1),
     Anio SMALLINT,
@@ -19,26 +24,18 @@ CREATE TABLE DATA_DEALERS.BI_Dimension_Ubicacion (
 CREATE TABLE DATA_DEALERS.BI_Dimension_Rango_Etario_Clientes (
     Rango_Etario_Id BIGINT PRIMARY KEY IDENTITY(0, 1),
     Edad_Minima TINYINT, -- Justificacion
-    Edad_Maxima TINYINT,
-    CHECK ((Edad_Minima = 0 AND Edad_Maxima = 25) OR 
-           (Edad_Minima = 25 AND Edad_Maxima = 35) OR 
-           (Edad_Minima = 35 AND Edad_Maxima = 50) OR 
-           (Edad_Minima = 50 AND Edad_Maxima = 255))
+    Edad_Maxima TINYINT
 )
 
 CREATE TABLE DATA_DEALERS.BI_Dimension_Turno_Ventas (
     Turno_Ventas_Id BIGINT PRIMARY KEY IDENTITY(0, 1),
-    Horario_Minimo TINYINT, 
-    Horario_Maximo TINYINT,
-    CHECK ((Horario_Minimo = 8 AND Horario_Maximo = 14) OR 
-           (Horario_Minimo = 14 AND Horario_Maximo = 20))
+    Horario_Minimo TINYINT,
+    Horario_Maximo TINYINT
 )
 
 CREATE TABLE DATA_DEALERS.BI_Dimension_Tipo_Material (
     Tipo_Material_Id BIGINT PRIMARY KEY IDENTITY(0, 1),
-    Tela NVARCHAR(255),
-    Madera NVARCHAR(255),
-    Relleno NVARCHAR(255)
+    Tipo_Material NVARCHAR(255)
 )
 
 CREATE TABLE DATA_DEALERS.BI_Dimension_Modelo_Sillon (
@@ -57,59 +54,54 @@ CREATE TABLE DATA_DEALERS.BI_Dimension_Sucursal (
 )
 
 -- Hechos
-CREATE TABLE DATA_DEALERS.BI_Hechos_Ventas (
-    Tiempo_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
-    Ubicacion_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Ubicacion,
-    Sucursal_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Sucursal,
-    Turno_Ventas_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Turno_Ventas,
-    Total_Ingresos DECIMAL(38,2) NOT NULL,
-    Cantidad_Facturas BIGINT NOT NULL,
-    Promedio_Factura DECIMAL(38,2) NOT NULL,
-    Promedio_Tiempo_Fab DECIMAL(6,2) NOT NULL,
-    PRIMARY KEY (Tiempo_Id, Ubicacion_Id, Sucursal_Id, Turno_Ventas_Id)
-)
 
-CREATE TABLE DATA_DEALERS.BI_Hechos_Ventas_Detalles ( -- Relaciona cada detalle de venta con modelo_sillon
-    Modelo_Sillon_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Modelo_Sillon,
-    Rango_Etario_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Rango_Etario_Clientes,
-    Tiempo_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
-    Ubicacion_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Ubicacion,
+CREATE TABLE DATA_DEALERS.BI_Hechos_Ventas (
+    Detalle_Factura_Numero BIGINT,
+    Factura_Numero BIGINT,
+    Modelo_Sillon_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Modelo_Sillon,
+    Rango_Etario_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Rango_Etario_Clientes,
+    Tiempo_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
+    Ubicacion_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Ubicacion,
+    Sucursal_Id BIGINT NOT NULL REFERENCES  DATA_DEALERS.BI_Dimension_Sucursal,
+    Detalle_Subtotal DECIMAL(38,2) NOT NULL,
     Detalle_Cantidad BIGINT NOT NULL,
-    PRIMARY KEY (Modelo_Sillon_Id, Rango_Etario_Id, Tiempo_Id, Ubicacion_Id)
+    Detalle_Tiempo_Fabricacion DECIMAL(6,2) NOT NULL,
+    PRIMARY KEY (Detalle_Factura_Numero, Factura_Numero)
 )
 
 CREATE TABLE DATA_DEALERS.BI_Hechos_Compras (
-    Tiempo_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
-    Sucursal_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Sucursal,
-    Tipo_Material_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Tipo_Material,
-    Total_Egresos DECIMAL(38,2) NOT NULL,
-    Cantidad_Compras BIGINT NOT NULL,
-    PRIMARY KEY (Tiempo_Id, Sucursal_Id, Tipo_Material_Id)
+    Detalle_Compra_Codigo BIGINT,
+    Compra_Numero BIGINT,
+    Tiempo_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
+    Sucursal_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Sucursal,
+    Tipo_Material_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Tipo_Material,
+    Detalle_Subtotal DECIMAL(38,2) NOT NULL,
+    PRIMARY KEY (Detalle_Compra_Codigo, Compra_Numero)
 )
 
 CREATE TABLE DATA_DEALERS.BI_Hechos_Pedidos (
-    Tiempo_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
-    Sucursal_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Sucursal,
-    Estado_Pedido_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Estado_Pedido,
-    Turno_Ventas_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Turno_Ventas,
-    Cantidad_Pedidos BIGINT NOT NULL,
-    Porc_Conversion DECIMAL(5,2) NOT NULL,
-    PRIMARY KEY (Tiempo_Id, Sucursal_Id, Estado_Pedido_Id, Turno_Ventas_Id)
+    Pedido_Numero DECIMAL(18,0) PRIMARY KEY,
+    Tiempo_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
+    Sucursal_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Sucursal,
+    Estado_Pedido_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Estado_Pedido,
+    Turno_Ventas_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Turno_Ventas
 )
 
 CREATE TABLE DATA_DEALERS.BI_Hechos_Envios (
-    Tiempo_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
-    Ubicacion_Id BIGINT REFERENCES DATA_DEALERS.BI_Dimension_Ubicacion,
-    Cantidad_Envios BIGINT NOT NULL,
-    Cantidad_Cumplidos BIGINT NOT NULL,
-    Total_Costo_Envios DECIMAL(38,2) NOT NULL,
-    PRIMARY KEY (Tiempo_Id, Ubicacion_Id)
+    Envio_Numero DECIMAL(18,0) PRIMARY KEY,
+    Tiempo_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Tiempo,
+    Ubicacion_Id BIGINT NOT NULL REFERENCES DATA_DEALERS.BI_Dimension_Ubicacion,
+    Envio_Fecha_Programada DATETIME2(0) NOT NULL,
+    Envio_Fecha_Entrega DATETIME2(0),
+    Envio_Total DECIMAL(18,2) NOT NULL
 )
+
+--------- VISTAS ---------
 
 -- 1. Ganancias: Total de ingresos (facturación) - total de egresos (compras), por
 --     cada mes, por cada sucursal.
 --     [VENTAS, COMPRAS]
-
+/*
 CREATE VIEW DATA_DEALERS.VW_Ganancias_Mensuales AS
 SELECT 
     t.Anio,
@@ -226,7 +218,7 @@ GROUP BY
 -- 6. Tiempo promedio de fabricación: Tiempo promedio que tarda cada sucursal
 --     entre que se registra un pedido y registra la factura para el mismo. Por
 --     cuatrimestre.
---     [PEDIDOS, VENTAS]
+--     [VENTAS]
 
 CREATE VIEW DATA_DEALERS.VW_Tiempo_Promedio_Fabricacion AS
 SELECT 
@@ -306,3 +298,288 @@ FROM DATA_DEALERS.BI_Hechos_Envios e
     JOIN DATA_DEALERS.BI_Dimension_Ubicacion u ON e.Ubicacion_Id = u.Ubicacion_Id
 GROUP BY u.Localidad
 ORDER BY Costo_Promedio DESC;
+*/
+------------------------------ MIGRACION -----------------------------
+
+--------- CREACION DE PROCEDURES ---------
+
+-- Dimensiones
+
+GO
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_tiempo
+AS
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Tiempo(Anio, Cuatrimestre, Mes)
+    (
+    SELECT DISTINCT 
+        YEAR(Factura_Fecha) AS Anio,
+        DATEPART(QUARTER, Factura_Fecha) AS Cuatrimestre,
+        MONTH(Factura_Fecha) AS Mes
+    FROM DATA_DEALERS.Factura
+    UNION 
+    SELECT DISTINCT 
+        YEAR(Pedido_Fecha) AS Anio,
+        DATEPART(QUARTER, Pedido_Fecha) AS Cuatrimestre,
+        MONTH(Pedido_Fecha) AS Mes
+    FROM DATA_DEALERS.Pedido
+    UNION
+    SELECT DISTINCT 
+        YEAR(Compra_Fecha) AS Anio,
+        DATEPART(QUARTER, Compra_Fecha) AS Cuatrimestre,
+        MONTH(Compra_Fecha) AS Mes
+    FROM DATA_DEALERS.Compra
+    UNION
+    SELECT DISTINCT 
+        YEAR(Envio_Fecha_Programada) AS Anio,
+        DATEPART(QUARTER, Envio_Fecha_Programada) AS Cuatrimestre,
+        MONTH(Envio_Fecha_Programada) AS Mes
+    FROM DATA_DEALERS.Envio
+    UNION
+    SELECT DISTINCT 
+        YEAR(Envio_Fecha) AS Anio,
+        DATEPART(QUARTER, Envio_Fecha) AS Cuatrimestre,
+        MONTH(Envio_Fecha) AS Mes
+    FROM DATA_DEALERS.Envio
+    )
+END
+GO
+
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_ubicacion
+AS
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Ubicacion(Provincia, Localidad)
+    (
+    SELECT DISTINCT 
+        p.Provincia_Nombre, 
+        l.Localidad_Nombre
+    FROM DATA_DEALERS.Cliente c
+        JOIN DATA_DEALERS.Direccion d ON c.Cliente_Direccion = d.Direccion_Codigo
+        JOIN DATA_DEALERS.Localidad l ON d.Localidad_Codigo = l.Localidad_Codigo
+        JOIN DATA_DEALERS.Provincia p ON l.Provincia_Codigo = p.Provincia_Codigo
+    UNION
+    SELECT DISTINCT 
+        p.Provincia_Nombre, 
+        l.Localidad_Nombre
+    FROM DATA_DEALERS.Sucursal s
+        JOIN DATA_DEALERS.Direccion d ON s.Sucursal_Direccion = d.Direccion_Codigo
+        JOIN DATA_DEALERS.Localidad l ON d.Localidad_Codigo = l.Localidad_Codigo
+        JOIN DATA_DEALERS.Provincia p ON l.Provincia_Codigo = p.Provincia_Codigo
+    )
+END
+GO
+
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_rango_etario_clientes
+AS 
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Rango_Etario_Clientes(Edad_Minima, Edad_Maxima)
+    VALUES 
+        (0, 24),
+        (25, 34),
+        (35, 49),
+        (50, 255)
+END
+GO
+
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_turno_ventas
+AS 
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Turno_Ventas(Horario_Minimo, Horario_Maximo)
+    VALUES 
+        (8, 13),
+        (14, 20)
+END
+GO
+
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_tipo_material
+AS
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Tipo_Material(Tipo_Material)
+    VALUES 
+        ('Madera'), 
+        ('Relleno'), 
+        ('Tela')
+END
+GO
+
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_modelo_sillon
+AS
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Modelo_Sillon(Nombre_Modelo)
+    SELECT Sillon_Modelo
+    FROM DATA_DEALERS.Sillon_Modelo
+END
+GO
+
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_estado_pedido
+AS
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Estado_Pedido(Estado_Pedido)
+    VALUES 
+        ('PENDIENTE'),
+        ('CANCELADO'),
+        ('ENTREGADO')
+END
+GO
+
+CREATE PROCEDURE DATA_DEALERS.migrate_dimension_sucursal
+AS
+BEGIN
+    INSERT INTO DATA_DEALERS.BI_Dimension_Sucursal(Sucursal_NroSucursal)
+    SELECT Sucursal_NroSucursal
+    FROM DATA_DEALERS.Sucursal
+END
+GO
+
+-- Hechos
+
+CREATE PROCEDURE DATA_DEALERS.migrate_hechos_ventas
+AS
+BEGIN
+    -- Inserta los datos transformados en la tabla BI_Hechos_Ventas
+    INSERT INTO DATA_DEALERS.BI_Hechos_Ventas(Detalle_Factura_Numero, Factura_Numero, Modelo_Sillon_Id, Rango_Etario_Id, Tiempo_Id, Ubicacion_Id, Sucursal_Id, Detalle_Subtotal, Detalle_Cantidad, Detalle_Tiempo_Fabricacion)
+    SELECT 
+        -- PKs
+        df.Detalle_Factura_Numero,
+        df.Factura_Numero,
+        -- Ids de las dimensiones
+        dm.Modelo_Sillon_Id, 
+        r.Rango_Etario_Id, 
+        t.Tiempo_Id, 
+        u.Ubicacion_Id, 
+        ds.Sucursal_Id, 
+        -- Datos del detalles del factura
+        df.Detalle_Factura_Subtotal,
+        df.Detalle_Factura_Cantidad,
+        -- Dias de fabricacion: diferencia entre la fecha del pedido y la fecha de la factura
+        DATEDIFF(DAY, p.Pedido_Fecha, f.Factura_Fecha)
+    FROM DATA_DEALERS.Detalle_Factura df
+        JOIN DATA_DEALERS.Factura f ON df.Factura_Numero = f.Factura_Numero
+        JOIN DATA_DEALERS.Pedido p ON df.Pedido_Numero = p.Pedido_Numero
+        
+        -- Para obtener el id de la dimension modelo sillon
+        JOIN DATA_DEALERS.Detalle_Pedido dp ON df.Pedido_Numero = dp.Pedido_Numero AND df.Detalle_Factura_Numero = dp.Detalle_Pedido_Numero
+        JOIN DATA_DEALERS.Sillon s ON dp.Detalle_Sillon = s.Sillon_Codigo
+        JOIN DATA_DEALERS.Sillon_Modelo m ON s.Sillon_Modelo = m.Sillon_Modelo_Codigo
+        JOIN DATA_DEALERS.BI_Dimension_Modelo_Sillon dm ON dm.Nombre_Modelo = m.Sillon_Modelo
+        
+        -- Para obtener los el id de la dimension rango etario
+        JOIN DATA_DEALERS.Cliente c ON f.Factura_Cliente = c.Cliente_Id
+        JOIN DATA_DEALERS.BI_Dimension_Rango_Etario_Clientes r ON 
+            DATEDIFF(YEAR, c.Cliente_FechaNacimiento, f.Factura_Fecha) BETWEEN r.Edad_Minima AND r.Edad_Maxima
+
+        -- Para obtener el id de la dimension tiempo
+        JOIN DATA_DEALERS.BI_Dimension_Tiempo t ON 
+            YEAR(f.Factura_Fecha) = t.Anio AND 
+            DATEPART(QUARTER, f.Factura_Fecha) = t.Cuatrimestre AND 
+            MONTH(f.Factura_Fecha) = t.Mes
+        
+        -- Para obtener el id de la dimension ubicacion
+        JOIN DATA_DEALERS.Sucursal su ON f.Factura_Sucursal = su.Sucursal_NroSucursal
+        JOIN DATA_DEALERS.Direccion d ON su.Sucursal_Direccion = d.Direccion_Codigo
+        JOIN DATA_DEALERS.Localidad l ON d.Localidad_Codigo = l.Localidad_Codigo
+        JOIN DATA_DEALERS.Provincia pr ON l.Provincia_Codigo = pr.Provincia_Codigo
+        JOIN DATA_DEALERS.BI_Dimension_Ubicacion u ON
+            u.Localidad = l.Localidad_Nombre AND 
+            u.Provincia = pr.Provincia_Nombre
+
+        -- Busca el id de la dimension sucursal
+        JOIN DATA_DEALERS.BI_Dimension_Sucursal ds ON f.Factura_Sucursal = ds.Sucursal_NroSucursal
+END 
+GO
+/*
+CREATE PROCEDURE DATA_DEALERS.migrate_hechos_compras
+AS
+BEGIN
+    -- Inserta los datos transformados en la tabla BI_Hechos_Compras
+    INSERT INTO DATA_DEALERS.BI_Hechos_Compras(
+        Tiempo_Id, 
+        Sucursal_Id, 
+        Tipo_Material_Id, 
+        Detalle_Subtotal
+    )
+    SELECT 
+        t.Tiempo_Id,
+        ds.Sucursal_Id,
+        dt.Tipo_Material_Id,
+        SUM(dc.Detalle_Compra_Subtotal)
+    FROM DATA_DEALERS.Detalle_Compra dc
+        JOIN DATA_DEALERS.Compra c ON dc.Compra_Numero = c.Compra_Numero
+        
+        -- Para obtener el id de la dimension tiempo
+        JOIN DATA_DEALERS.BI_Dimension_Tiempo t ON YEAR(c.Compra_Fecha) + DATEPART(QUARTER, c.Compra_Fecha) + MONTH(c.Compra_Fecha) = t.Anio + t.Cuatrimestre + t.Mes
+        
+        -- Para obtener el id de la dimension sucursal
+        JOIN DATA_DEALERS.Sucursal su ON c.Compra_Sucursal = su.Sucursal_NroSucursal
+        JOIN DATA_DEALERS.BI_Dimension_Sucursal ds ON su.Sucursal_NroSucursal = ds.Sucursal_NroSucursal
+        
+        -- Para obtener el id de la dimension tipo material
+        JOIN DATA_DEALERS.Material m ON dc.Detalle_Compra_Material = m.Material_Codigo
+        JOIN DATA_DEALERS.BI_Dimension_Tipo_Material dt ON m.Material_Tipo = dt.Tipo_Material
+    GROUP BY 
+        t.Tiempo_Id, 
+        ds.Sucursal_Id, 
+        dt.Tipo_Material_Id
+END
+GO
+*/
+--------- EXEC PROCEDURES ---------
+
+EXEC DATA_DEALERS.migrate_dimension_tiempo
+EXEC DATA_DEALERS.migrate_dimension_ubicacion
+EXEC DATA_DEALERS.migrate_dimension_rango_etario_clientes
+EXEC DATA_DEALERS.migrate_dimension_turno_ventas
+EXEC DATA_DEALERS.migrate_dimension_tipo_material
+EXEC DATA_DEALERS.migrate_dimension_modelo_sillon
+EXEC DATA_DEALERS.migrate_dimension_estado_pedido
+EXEC DATA_DEALERS.migrate_dimension_sucursal
+EXEC DATA_DEALERS.migrate_hechos_ventas
+EXEC DATA_DEALERS.migrate_hechos_compras
+EXEC DATA_DEALERS.migrate_hechos_envios
+EXEC DATA_DEALERS.migrate_hechos_pedidos
+
+------------------------------- ELIMINACION DE ESTRUCTURAS 
+
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_tiempo;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_ubicacion;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_rango_etario_clientes;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_turno_ventas;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_tipo_material;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_modelo_sillon;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_estado_pedido;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_dimension_sucursal;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_hechos_ventas;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_hechos_compras;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_hechos_envios;
+DROP PROCEDURE IF EXISTS DATA_DEALERS.migrate_hechos_pedidos;
+
+
+-----------------------------
+
+/*
+-- Eliminar vistas
+DECLARE @sql NVARCHAR(MAX) = '';
+SELECT @sql = @sql + 'DROP VIEW IF EXISTS ' + QUOTENAME(TABLE_SCHEMA) + '.' + QUOTENAME(TABLE_NAME) + ';' + CHAR(13)
+FROM INFORMATION_SCHEMA.VIEWS
+WHERE TABLE_SCHEMA = 'DATA_DEALERS';
+
+EXEC sp_executesql @sql;
+
+-- Eliminar restricciones de claves foráneas de las tablas que empiezan con 'BI'
+DECLARE @sql NVARCHAR(MAX) = '';
+SELECT @sql = @sql + 'ALTER TABLE ' + QUOTENAME(SCHEMA_NAME) + '.' + QUOTENAME(PARENT_OBJECT_NAME) + 
+               ' DROP CONSTRAINT ' + QUOTENAME(NAME) + ';' + CHAR(13)
+FROM sys.foreign_keys fk
+JOIN sys.objects o ON fk.parent_object_id = o.object_id
+JOIN sys.schemas s ON o.schema_id = s.schema_id
+WHERE s.name = 'DATA_DEALERS' AND o.name LIKE 'BI%';
+
+EXEC sp_executesql @sql;
+
+-- Eliminar las tablas que comienzan con 'DATA_DEALERS.BI'
+DECLARE @sql NVARCHAR(MAX) = '';
+SET @sql = '';
+SELECT @sql = @sql + 'DROP TABLE IF EXISTS ' + QUOTENAME(TABLE_SCHEMA) + '.' + QUOTENAME(TABLE_NAME) + ';' + CHAR(13)
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = 'DATA_DEALERS' AND TABLE_NAME LIKE 'BI%';
+
+EXEC sp_executesql @sql;
