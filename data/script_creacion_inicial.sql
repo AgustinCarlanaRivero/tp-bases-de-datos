@@ -304,9 +304,11 @@ BEGIN
     WHILE @@FETCH_STATUS = 0
     BEGIN
         -- Buscar el siguiente numero de detalle para la factura (incremental por factura)
-        SELECT @Detalle_Factura_Numero = COUNT(*) 
-        FROM DATA_DEALERS.Detalle_Factura
-        WHERE Factura_Numero = @Factura_Numero
+        SELECT @Detalle_Factura_Numero = Detalle_Pedido_Numero 
+        FROM DATA_DEALERS.Detalle_Pedido
+        WHERE Pedido_Numero = @Pedido_Numero AND
+            Detalle_Pedido_Precio = @Detalle_Factura_Precio AND
+            Detalle_Pedido_Cantidad = @Detalle_Factura_Cantidad
 
         -- Inserta la fila en la tabla con el numero incremental y el subtotal
         INSERT INTO DATA_DEALERS.Detalle_Factura (Factura_Numero, Detalle_Factura_Numero, Pedido_Numero, Detalle_Factura_Precio, Detalle_Factura_Cantidad, Detalle_Factura_Subtotal)
